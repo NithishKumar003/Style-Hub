@@ -1,23 +1,55 @@
+
+from getpass import getpass
+
 from app.database.database import SessionLocal
 from app.models.user import User
 from app.core.security import hash_password
 
+
+admin_name = input("Enter admin name: ").strip()
+admin_email = input("Enter admin email: ").strip().lower()
+admin_password = getpass("Enter admin password: ")
+
+if not admin_name or not admin_email:
+    print("Name and email are required.")
+    raise SystemExit(1)
+
+if len(admin_password) < 8:
+    print("Password must contain at least 8 characters.")
+    raise SystemExit(1)
+
 db = SessionLocal()
 
-admin_user = User(
-    name="Admin",
-    email="5633nithi@gmail.com",
-    hashed_password=hash_password("Admin123"),
-    role="ADMIN"
-)
+try:
+    existing_user = (
+        db.query(User)
+        .filter(User.email == admin_email)
+        .first()
+    )
 
-db.add(admin_user)
-db.commit()
-db.refresh(admin_user)
+    if existing_user:
+        print("A user with this email already exists.")
+        print("No changes were made.")
+    else:
+        admin_user = User(
+            name=admin_name,
+            email=admin_email,
+            hashed_password=hash_password(admin_password),
+            role="ADMIN"
+        )
 
-print("Admin created successfully")
-print("Admin ID:", admin_user.id)
-print("Admin Email:", admin_user.email)
-print("Admin Role:", admin_user.role)
+        db.add(admin_user)
+        db.commit()
+        db.refresh(admin_user)
 
-db.close()
+        print("Admin created successfully.")
+        print("Admin ID:", admin_user.id)
+        print("Admin Email:", admin_user.email)
+        print("Admin Role:", admin_user.role)
+
+except Exception:
+    db.rollback()
+    raise
+
+finally:
+    db.close()
