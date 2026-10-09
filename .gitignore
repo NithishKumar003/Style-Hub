@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment secrets
+.env
+.env.*
+
+# SQLite development database
+backend/*.db
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+
+# Editor files
+.vscode/
