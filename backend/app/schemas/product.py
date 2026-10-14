@@ -16,7 +16,7 @@ class ProductUpdate(BaseModel):
     description : str | None = Field(default=None, min_length=5)
     price : Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
     category : str | None = Field(default=None, min_length=2, max_length=100)
-    image_url : str | None = Field(default=None, ge=0)
+    image_url : str | None = Field(default=None, max_length=500)
     stock: int | None = Field(default=None, ge=0)
     is_active: bool| None = None
     

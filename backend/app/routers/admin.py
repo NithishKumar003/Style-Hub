@@ -17,23 +17,49 @@ router = APIRouter(
 class OrderStatusUpdate(BaseModel):
     status: str
 
+
+@router.get("/products")
+def get_admin_products(
+    db: Session = Depends(get_db),
+    current_admin=Depends(require_admin)
+):
+    products = db.query(Product).order_by(Product.id.desc()).all()
+
+    return products
+
 @router.get("/dashboard")
 def get_admin_dashboard(
     db: Session = Depends(get_db),
-    current_admin = Depends(require_admin)
+    current_admin=Depends(require_admin)
 ):
+    # Product statistics
     total_products = db.query(Product).count()
 
     active_products = db.query(Product).filter(
-        Product.is_active == True
+        Product.is_active.is_(True)
     ).count()
 
     inactive_products = total_products - active_products
 
+    # Order statistics
+    total_orders = db.query(Order).count()
+
+    pending_orders = db.query(Order).filter(
+        Order.status == "PENDING"
+    ).count()
+
+    # Customer statistics
+    total_customers = db.query(User).filter(
+        User.role == "CUSTOMER"
+    ).count()
+
     return {
         "total_products": total_products,
         "active_products": active_products,
-        "inactive_products": inactive_products
+        "inactive_products": inactive_products,
+        "total_orders": total_orders,
+        "pending_orders": pending_orders,
+        "total_customers": total_customers
     }
 
 @router.get("/users", response_model=list[UserResponse])
@@ -44,6 +70,7 @@ def get_all_users(
     users = db.query(User).order_by(User.id.asc()).all()
 
     return users
+
 
 @router.get("/orders")
 def get_all_orders(
@@ -68,8 +95,16 @@ def get_all_orders(
         items = []
 
         for item in order_items:
+            # Find the product to get its name
+            product = (
+                db.query(Product)
+                .filter(Product.id == item.product_id)
+                .first()
+            )
+
             items.append({
                 "product_id": item.product_id,
+                "product_name": product.name if product else None,
                 "quantity": item.quantity,
                 "price_at_purchase": item.price_at_purchase
             })
@@ -79,6 +114,9 @@ def get_all_orders(
             "user_id": order.user_id,
             "total_amount": order.total_amount,
             "status": order.status,
+            "payment_status": order.payment_status,
+            "payment_method": order.payment_method,
+            "payment_error": order.payment_error,
             "created_at": order.created_at,
             "items": items
         })
@@ -147,33 +185,38 @@ def update_order_status(
         if new_status not in allowed_transactions.get(order.status, set()):
             raise HTTPException(
                 status_code=400,
-                detain=f"Invalid status transaction from {order.status} to {new_status}"
+                detail=f"Invalid status transaction from {order.status} to {new_status}"
             )
 
         if new_status == "CANCELLED":
             if order.status == "SHIPPED":
                 raise HTTPException(
                     status_code=400,
-                    detail="Shipped orders cannot be cancelled"
+                    detail="Shipped orders cannot be cancelled",
                 )
 
-            order_items = (
-                db.query(OrderItem)
-                .filter(OrderItem.order_id == order.id)
-                .all()
-            )
-
-            for item in order_items:
-                product = (
-                    db.query(Product)
-                    .filter(Product.id == item.product_id)
-                    .with_for_update()
-                    .first()
+            # Restore stock only if it was previously deducted.
+            if order.stock_deducted:
+                order_items = (
+                    db.query(OrderItem)
+                    .filter(OrderItem.order_id == order.id)
+                    .all()
                 )
 
-                if product is not None:
-                    product.stock += item.quantity
+                for item in order_items:
+                    product = (
+                        db.query(Product)
+                        .filter(Product.id == item.product_id)
+                        .with_for_update()
+                        .first()
+                    )
 
+                    if product is not None:
+                        product.stock += item.quantity
+
+                # Prevent stock from being restored a second time.
+                order.stock_deducted = False
+                
         order.status = new_status
         db.commit()
 

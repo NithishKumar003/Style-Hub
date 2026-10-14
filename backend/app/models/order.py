@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Text, Boolean
 from sqlalchemy.orm import relationship
 from app.database.database import Base
 
@@ -12,6 +12,11 @@ class Order(Base):
     status = Column(String(30), nullable=False, default="PENDING")
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    payment_status = Column(String(30), nullable=False, default="PENDING")
+    payment_method = Column(String(30), nullable=False, default="STRIPE")
+    stripe_payment_intent_id = Column(String(255), nullable=True, unique=True)
+    payment_error = Column(Text, nullable=True)
+    stock_deducted = Column(Boolean, nullable=False, default=False)
     
 class OrderItem(Base):
     __tablename__ = "order_items"
