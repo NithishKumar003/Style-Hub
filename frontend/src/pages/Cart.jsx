@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Elements } from "@stripe/react-stripe-js";
+import { useAuth } from "../context/useAuth";
 
 import api from "../api/axios";
 import StripeCheckout from "../components/StripeCheckout";
@@ -8,39 +9,60 @@ import stripePromise from "../stripe";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 
-const PENDING_ORDER_KEY = "stylehub_pending_stripe_order_id";
+const LEGACY_PENDING_ORDER_KEY = "stylehub_pending_stripe_order_id";
 
-function getSavedPendingOrderId() {
-  const savedOrderId = sessionStorage.getItem(PENDING_ORDER_KEY);
+function getPendingOrderKey(userId) {
+  return userId
+    ? `stylehub_pending_stripe_order_id_user_${userId}`
+    : null;
+}
+
+function getSavedPendingOrderId(userId) {
+  const key = getPendingOrderKey(userId);
+
+  if (!key) {
+    return null;
+  }
+
+  const savedOrderId = sessionStorage.getItem(key);
 
   if (savedOrderId && /^\d+$/.test(savedOrderId)) {
     return Number(savedOrderId);
   }
 
-  sessionStorage.removeItem(PENDING_ORDER_KEY);
+  sessionStorage.removeItem(key);
   return null;
 }
 
 function Cart() {
+  const { user } = useAuth();
+  const userId = user?.id;
+  const pendingOrderKey = getPendingOrderKey(userId);
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [pendingOrderId, setPendingOrderId] = useState(
-    getSavedPendingOrderId
-  );
+  const [pendingOrderId, setPendingOrderId] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("STRIPE");
   const [paymentDetails, setPaymentDetails] = useState(null);
 
   function savePendingOrderId(orderId) {
+    if (!pendingOrderKey) {
+        return;
+    }
+
     setPendingOrderId(orderId);
-    sessionStorage.setItem(PENDING_ORDER_KEY, String(orderId));
+    sessionStorage.setItem(pendingOrderKey, String(orderId));
   }
 
   function clearPendingOrderId() {
+    if (pendingOrderKey) {
+        sessionStorage.removeItem(pendingOrderKey);
+    }
+
+    sessionStorage.removeItem(LEGACY_PENDING_ORDER_KEY);
     setPendingOrderId(null);
-    sessionStorage.removeItem(PENDING_ORDER_KEY);
   }
 
   async function fetchCart() {
@@ -63,6 +85,10 @@ function Cart() {
 
     return () => clearTimeout(timerId);
   }, []);
+
+  useEffect(() => {
+    setPendingOrderId(getSavedPendingOrderId(userId));
+  }, [userId]);
 
   async function handleUpdateQuantity(item, newQuantity) {
     if (newQuantity < 1) return;
@@ -116,6 +142,11 @@ function Cart() {
   }
 
   async function handleCheckout() {
+
+    if (!userId || !pendingOrderKey) {
+        setMessage("Please wait for your account to load, then try checkout again.");
+        return;
+    }
     try {
       setCheckoutLoading(true);
       setMessage("");

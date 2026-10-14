@@ -67,6 +67,7 @@ export function AuthProvider({ children }) {
 
   function logout() {
     sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("stylehub_pending_stripe_order_id");
     setUser(null);
   }
 

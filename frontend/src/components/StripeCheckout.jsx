@@ -113,6 +113,7 @@ function StripeCheckout({
           <CardElement
             options={{
               hidePostalCode: true,
+              disablelink: true,
               style: {
                 base: {
                   fontSize: "16px",
